@@ -32,10 +32,24 @@ final class FolderStore {
     func open(_ folder: FolderItem) -> Bool {
         NSWorkspace.shared.open(folder.url)
     }
+
+    /// Opens the case journal, creating it from the template when missing.
+    /// `NSWorkspace.open` lets LaunchServices pick the app for `.md`, which is
+    /// what "let Finder decide" means here — no hard-coded editor.
+    /// - Returns: true when the file had to be created.
+    @discardableResult
+    func openJournal(for folder: FolderItem) throws -> Bool {
+        let (journalURL, created) = try Journal.ensureExists(folder)
+        guard NSWorkspace.shared.open(journalURL) else {
+            throw JournalError.couldNotOpen(journalURL.lastPathComponent)
+        }
+        return created
+    }
 }
 
-/// Command-line surface, so the scanning and filtering can be checked
-/// without a window: `SagerBrowser --list [--query hpc] [--root <path>]`.
+/// Command-line surface, so the scanning, filtering and journal naming can be
+/// checked without a window:
+///   SagerBrowser --list [--query hpc] [--root <path>] [--journals | --ensure-journals]
 enum CommandLineMode {
     static func isRequested(_ arguments: [String]) -> Bool {
         arguments.contains("--list")
@@ -44,6 +58,8 @@ enum CommandLineMode {
     static func run(_ arguments: [String]) -> Int32 {
         var root = FolderScanner.defaultRoot
         var query = ""
+        var reportJournals = false
+        var createJournals = false
         var index = 1
 
         while index < arguments.count {
@@ -56,6 +72,10 @@ enum CommandLineMode {
             case "--query":
                 index += 1
                 if index < arguments.count { query = arguments[index] }
+            case "--journals":
+                reportJournals = true
+            case "--ensure-journals":
+                createJournals = true
             default:
                 break
             }
@@ -67,8 +87,25 @@ enum CommandLineMode {
             let shown = FolderScanner.matching(all, query: query)
             print("root: \(FolderScanner.displayPath(root))")
             print("folders: \(all.count), matching: \(shown.count)")
+
             for folder in shown {
-                print("  \(folder.name)")
+                guard reportJournals || createJournals else {
+                    print("  \(folder.name)")
+                    continue
+                }
+
+                do {
+                    if createJournals {
+                        let result = try Journal.ensureExists(folder)
+                        print("  \(result.url.lastPathComponent) [\(result.created ? "created" : "exists")] in \(folder.name)")
+                    } else {
+                        let name = try Journal.url(for: folder).lastPathComponent
+                        let state = try Journal.exists(for: folder) ? "exists" : "missing"
+                        print("  \(name) [\(state)] in \(folder.name)")
+                    }
+                } catch {
+                    print("  !! \(folder.name): \(error.localizedDescription)")
+                }
             }
             return 0
         } catch {

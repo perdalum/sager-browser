@@ -7,6 +7,7 @@ struct ContentView: View {
 
     @State private var query = ""
     @State private var selection: FolderItem.ID?
+    @State private var journalError: String?
     @FocusState private var searchFocused: Bool
 
     private var visible: [FolderItem] {
@@ -37,6 +38,18 @@ struct ContentView: View {
         .onChange(of: query) {
             selection = visible.first?.id
         }
+        .alert("Could not open the journal", isPresented: showingJournalError) {
+            Button("OK", role: .cancel) { journalError = nil }
+        } message: {
+            Text(journalError ?? "")
+        }
+    }
+
+    private var showingJournalError: Binding<Bool> {
+        Binding(
+            get: { journalError != nil },
+            set: { if !$0 { journalError = nil } }
+        )
     }
 
     // MARK: - Header
@@ -123,7 +136,16 @@ struct ContentView: View {
             Text(folder.name)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+
+            Button {
+                openJournal(folder)
+            } label: {
+                Image(systemName: "doc.text")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(journalHelp(for: folder))
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
@@ -134,6 +156,20 @@ struct ContentView: View {
                 store.open(folder)
             }
         )
+    }
+
+    /// "Open sag 0001 -- journal.md (created if missing)"
+    private func journalHelp(for folder: FolderItem) -> String {
+        let name = Journal.fileName(forFolderNamed: folder.name) ?? "the journal"
+        return "Open \(name) — created from a template if missing"
+    }
+
+    private func openJournal(_ folder: FolderItem) {
+        do {
+            try store.openJournal(for: folder)
+        } catch {
+            journalError = error.localizedDescription
+        }
     }
 
     // MARK: - Footer

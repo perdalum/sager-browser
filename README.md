@@ -46,6 +46,7 @@ inside an `.app`, so LaunchServices treats it as an accessory process.
 | ↑ / ↓ | move the selection |
 | Return | open the selected folder (works from the search field *and* from the list) |
 | Double-click a row | open that folder |
+| 📄 button on a row | open `sag <sagsnummer> -- journal.md` from that folder; created from a template if missing |
 | Esc in the field | (system default) clears focus, not the query — use the ⊗ button to clear |
 | ⌘R | rescan the folder |
 
@@ -58,6 +59,8 @@ open hint.
 .build/release/SagerBrowser --list
 .build/release/SagerBrowser --list --query hpc
 .build/release/SagerBrowser --list --root /tmp/somedir --query x
+.build/release/SagerBrowser --list --journals          # journal name + exists/missing, creates nothing
+.build/release/SagerBrowser --list --ensure-journals   # create missing journals (combine with --root to sandbox it)
 ```
 
 Prints the root, the counts and the matching names; exits `1` with a message
@@ -73,6 +76,7 @@ SagerBrowser/
 │   ├── SagerBrowserApp.swift   @main, window, ⌘R command
 │   ├── ContentView.swift       search bar, list, footer
 │   ├── FolderStore.swift       observable state, NSWorkspace open, CLI mode
+│   ├── Journal.swift           journal file naming + template
 │   └── FolderScanner.swift     pure scanning/filtering/sorting/path display
 ├── Resources/Info.plist
 ├── build.sh
@@ -84,6 +88,13 @@ SagerBrowser/
 - **Opening:** `NSWorkspace.shared.open(folderURL)` — the LaunchServices path.
   Finder brings up the folder; nothing is sent to Finder as an Apple event, so
   macOS never asks for Automation access.
+- **Journal:** `<case folder>/sag <sagsnummer> -- journal.md`. The sagsnummer is
+  the first whitespace-delimited token after `sag ` in the folder name, so
+  `sag 0033 - AU -- DeiC-DM` still gives `sag 0033 -- journal.md`. A missing
+  file is written from `Journal.template(for:)` (title, sagsnummer, folder,
+  creation date, `## Log`); an existing one is never touched. Opening goes
+  through `NSWorkspace.shared.open`, so LaunchServices — not the app — decides
+  which editor a `.md` opens in.
 - **Scanning:** `FileManager.contentsOfDirectory(at:includingPropertiesForKeys:)`
   with `isDirectoryKey`. Names must start with `sag ` (case-sensitive, trailing
   space included) and be real folders; hidden entries are skipped.
