@@ -48,6 +48,8 @@ inside an `.app`, so LaunchServices treats it as an accessory process.
 | Double-click a row | open that folder |
 | 📄 button on a row | open `sag <sagsnummer> -- journal.md` from that folder; created from a template if missing |
 | Esc in the field | (system default) clears focus, not the query — use the ⊗ button to clear |
+| + (⌘N) | new sag: asks for a description, creates `sag <next> -- <description>` and its journal, selects the new folder |
+| Name / Modified (header) | segmented control: sort by folder name, or newest modification first |
 | ⌘R | rescan the folder |
 
 The header shows `matches/total`, the footer shows the scanned path and the
@@ -59,6 +61,9 @@ open hint.
 .build/release/SagerBrowser --list
 .build/release/SagerBrowser --list --query hpc
 .build/release/SagerBrowser --list --root /tmp/somedir --query x
+.build/release/SagerBrowser --list --sort modified     # name | modified (default name)
+.build/release/SagerBrowser --list --next             # next sagsnummer, creates nothing
+.build/release/SagerBrowser --list --create "AU -- text" --root /tmp/x   # create folder + journal
 .build/release/SagerBrowser --list --journals          # journal name + exists/missing, creates nothing
 .build/release/SagerBrowser --list --ensure-journals   # create missing journals (combine with --root to sandbox it)
 ```
@@ -77,6 +82,8 @@ SagerBrowser/
 │   ├── ContentView.swift       search bar, list, footer
 │   ├── FolderStore.swift       observable state, NSWorkspace open, CLI mode
 │   ├── Journal.swift           journal file naming + template
+│   ├── NewSag.swift           next number, folder + journal creation
+│   ├── NewSagSheet.swift      "New sag" sheet (description field)
 │   └── FolderScanner.swift     pure scanning/filtering/sorting/path display
 ├── Resources/Info.plist
 ├── build.sh
@@ -88,6 +95,11 @@ SagerBrowser/
 - **Opening:** `NSWorkspace.shared.open(folderURL)` — the LaunchServices path.
   Finder brings up the folder; nothing is sent to Finder as an Apple event, so
   macOS never asks for Automation access.
+- **New sag:** the next number is `max(existing sagsnummer) + 1`, zero-padded to
+  four digits (`0079`), so gaps left by deleted cases are never reused. The
+  folder is `sag <nummer> -- <description>` and its journal is created in the
+  same step; a description containing `/` or an empty one is refused before
+  anything is written.
 - **Journal:** `<case folder>/sag <sagsnummer> -- journal.md`. The sagsnummer is
   the first whitespace-delimited token after `sag ` in the folder name, so
   `sag 0033 - AU -- DeiC-DM` still gives `sag 0033 -- journal.md`. A missing
@@ -98,8 +110,12 @@ SagerBrowser/
 - **Scanning:** `FileManager.contentsOfDirectory(at:includingPropertiesForKeys:)`
   with `isDirectoryKey`. Names must start with `sag ` (case-sensitive, trailing
   space included) and be real folders; hidden entries are skipped.
-- **Sorting:** `localizedStandardCompare`, the Finder-like ordering that keeps
-  `sag 0002` before `sag 0010`.
+- **Sorting:** by name uses `localizedStandardCompare`, the Finder-like ordering
+  that keeps `sag 0002` before `sag 0010`. By modification it is newest first
+  (`contentModificationDate` of the folder itself), with name order as the
+  tie-break — your archive has only 24 distinct folder timestamps across 69
+  folders, so the tie-break does real work. Changing the order re-sorts what
+  is already in memory; ⌘R is only needed to rescan.
 - **Filtering:** the query is split on whitespace (`FolderScanner.terms(in:)`)
   and the words are **AND'ed** with `localizedCaseInsensitiveContains`. So
   `intune` matches `sag 0001 -- AU -- Intune registrering af Mac`, and

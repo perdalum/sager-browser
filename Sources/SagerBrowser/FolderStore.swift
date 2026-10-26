@@ -7,8 +7,18 @@ import Observation
 @Observable
 final class FolderStore {
     let root: URL
+    /// What the last scan found, unsorted; `folders` is the sorted view of it.
+    private var scanned: [FolderItem] = []
     private(set) var folders: [FolderItem] = []
     private(set) var loadError: String?
+
+    /// Choosing another order re-sorts what is already in memory.
+    var sortOrder: SortOrder = .name {
+        didSet {
+            guard sortOrder != oldValue else { return }
+            folders = FolderScanner.sorted(scanned, by: sortOrder)
+        }
+    }
 
     var displayRoot: String { FolderScanner.displayPath(root) }
 
@@ -19,12 +29,13 @@ final class FolderStore {
 
     func reload() {
         do {
-            folders = try FolderScanner.scan(root: root)
+            scanned = try FolderScanner.scan(root: root)
             loadError = nil
         } catch {
-            folders = []
+            scanned = []
             loadError = error.localizedDescription
         }
+        folders = FolderScanner.sorted(scanned, by: sortOrder)
     }
 
     /// Opens the folder in Finder (one window, the folder's own contents).
@@ -49,7 +60,10 @@ final class FolderStore {
 
 /// Command-line surface, so the scanning, filtering and journal naming can be
 /// checked without a window:
-///   SagerBrowser --list [--query hpc] [--root <path>] [--journals | --ensure-journals]
+///   SagerBrowser --list [--query hpc] [--root <path>] [--sort name|modified]
+///                      [--journals | --ensure-journals]
+///   SagerBrowser --list --next                  (next sagsnummer)
+///   SagerBrowser --list --create "description"  (creates folder + journal)
 enum CommandLineMode {
     static func isRequested(_ arguments: [String]) -> Bool {
         arguments.contains("--list")
@@ -60,6 +74,9 @@ enum CommandLineMode {
         var query = ""
         var reportJournals = false
         var createJournals = false
+        var sortOrder = SortOrder.name
+        var createDescription: String?
+        var printNextNumber = false
         var index = 1
 
         while index < arguments.count {
@@ -76,6 +93,16 @@ enum CommandLineMode {
                 reportJournals = true
             case "--ensure-journals":
                 createJournals = true
+            case "--sort":
+                index += 1
+                if index < arguments.count, let parsed = SortOrder(rawValue: arguments[index]) {
+                    sortOrder = parsed
+                }
+            case "--next":
+                printNextNumber = true
+            case "--create":
+                index += 1
+                if index < arguments.count { createDescription = arguments[index] }
             default:
                 break
             }
@@ -83,10 +110,29 @@ enum CommandLineMode {
         }
 
         do {
-            let all = try FolderScanner.scan(root: root)
+            let scanned = try FolderScanner.scan(root: root)
+
+            if let createDescription {
+                let number = NewSag.nextNumber(after: scanned)
+                do {
+                    let folder = try NewSag.create(description: createDescription, in: root, number: number)
+                    print("created: \(folder.name)")
+                    return 0
+                } catch {
+                    FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
+                    return 1
+                }
+            }
+
+            if printNextNumber {
+                print("next: \(NewSag.formatted(NewSag.nextNumber(after: scanned)))")
+                return 0
+            }
+
+            let all = FolderScanner.sorted(scanned, by: sortOrder)
             let shown = FolderScanner.matching(all, query: query)
             print("root: \(FolderScanner.displayPath(root))")
-            print("folders: \(all.count), matching: \(shown.count)")
+            print("sort: \(sortOrder.rawValue), folders: \(all.count), matching: \(shown.count)")
 
             for folder in shown {
                 guard reportJournals || createJournals else {

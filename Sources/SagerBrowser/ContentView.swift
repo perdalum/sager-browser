@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var query = ""
     @State private var selection: FolderItem.ID?
     @State private var journalError: String?
+    @State private var showingNewSag = false
     @FocusState private var searchFocused: Bool
 
     private var visible: [FolderItem] {
@@ -38,11 +39,28 @@ struct ContentView: View {
         .onChange(of: query) {
             selection = visible.first?.id
         }
+        .sheet(isPresented: $showingNewSag) {
+            NewSagSheet(
+                root: store.root,
+                number: NewSag.nextNumber(after: store.folders),
+                onCreate: { folder in
+                    store.reload()
+                    selection = folder.id
+                }
+            )
+        }
         .alert("Could not open the journal", isPresented: showingJournalError) {
             Button("OK", role: .cancel) { journalError = nil }
         } message: {
             Text(journalError ?? "")
         }
+    }
+
+    private var sortBinding: Binding<SortOrder> {
+        Binding(
+            get: { store.sortOrder },
+            set: { store.sortOrder = $0 }
+        )
     }
 
     private var showingJournalError: Binding<Bool> {
@@ -79,10 +97,30 @@ struct ContentView: View {
             Divider()
                 .frame(height: 14)
 
+            Picker("Sort", selection: sortBinding) {
+                ForEach(SortOrder.allCases) { order in
+                    Text(order.label).tag(order)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(width: 140)
+            .help("Sort rows by folder name or by last modification")
+
             Text("\(visible.count)/\(store.folders.count)")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .help("Showing \(visible.count) of \(store.folders.count) folders")
+
+            Button {
+                showingNewSag = true
+            } label: {
+                Image(systemName: "plus")
+            }
+            .buttonStyle(.borderless)
+            .help("New sag (⌘N)")
+            .keyboardShortcut("n", modifiers: .command)
 
             Button {
                 store.reload()
