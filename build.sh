@@ -29,6 +29,12 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_PATH" "$APP/Contents/MacOS/$APP_NAME"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
+if [ -f Resources/AppIcon.icns ]; then
+    cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+else
+    echo "   (no Resources/AppIcon.icns — run ./Tools/make-icon.sh for the icon)"
+fi
+
 # Ad-hoc signature: enough for local use and keeps Gatekeeper quiet.
 codesign --force --sign - "$APP" >/dev/null 2>&1 || echo "   (codesign skipped)"
 

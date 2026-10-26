@@ -21,6 +21,10 @@ struct ContentView: View {
             statusBar
         }
         .frame(minWidth: 580, minHeight: 440)
+        // Esc anywhere in the window empties the search field and puts the
+        // caret back in it. Sheets are separate scenes, so their Esc still
+        // cancels the sheet.
+        .onExitCommand { store.clearSearch() }
         .onAppear { searchFocused = true }
         .onChange(of: store.query) { store.selectFirstVisible() }
         .onChange(of: store.searchFocusRequests) { searchFocused = true }
@@ -78,6 +82,9 @@ struct ContentView: View {
             TextField("Search folders (space = all words)", text: searchText)
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
+                // Also handled on the window, in case the field editor eats
+                // the key before it bubbles up.
+                .onExitCommand { store.clearSearch() }
                 .onSubmit { store.openSelection() }
 
             if !store.query.isEmpty {
@@ -88,7 +95,7 @@ struct ContentView: View {
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
-                .help("Clear search (⇧⌘F)")
+                .help("Clear search (Esc or ⇧⌘F)")
             }
 
             Divider()
