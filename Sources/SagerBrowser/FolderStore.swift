@@ -1,16 +1,25 @@
 import AppKit
 import Observation
 
-/// Holds the scanned folders and hands opening off to `NSWorkspace`,
-/// which is the LaunchServices path — no Apple events, no Automation prompt.
+/// Holds the scanned folders, the window state the menu bar drives, and hands
+/// opening off to `NSWorkspace` (LaunchServices — no Apple events).
 @MainActor
 @Observable
 final class FolderStore {
     let root: URL
+
     /// What the last scan found, unsorted; `folders` is the sorted view of it.
     private var scanned: [FolderItem] = []
     private(set) var folders: [FolderItem] = []
     private(set) var loadError: String?
+
+    // Window state lives here rather than in the view so menu commands, which
+    // have no view context, can drive it.
+    var query = ""
+    var selection: FolderItem.ID?
+    var showingNewSag = false
+    var journalError: String?
+    private(set) var searchFocusRequests = 0
 
     /// Choosing another order re-sorts what is already in memory.
     var sortOrder: SortOrder = .name {
@@ -21,10 +30,20 @@ final class FolderStore {
     }
 
     var displayRoot: String { FolderScanner.displayPath(root) }
+    var visibleFolders: [FolderItem] { FolderScanner.matching(folders, query: query) }
+
+    /// The row the menus and Return act on: the selected one, else the first match.
+    var target: FolderItem? {
+        if let selection, let hit = visibleFolders.first(where: { $0.id == selection }) {
+            return hit
+        }
+        return visibleFolders.first
+    }
 
     init(root: URL = FolderScanner.defaultRoot) {
         self.root = root
         reload()
+        selection = visibleFolders.first?.id
     }
 
     func reload() {
@@ -38,7 +57,19 @@ final class FolderStore {
         folders = FolderScanner.sorted(scanned, by: sortOrder)
     }
 
+    // MARK: - Actions shared by the window and the menu bar
+
+    func selectFirstVisible() {
+        selection = visibleFolders.first?.id
+    }
+
     /// Opens the folder in Finder (one window, the folder's own contents).
+    func openSelection() {
+        guard let folder = target else { return }
+        selection = folder.id
+        open(folder)
+    }
+
     @discardableResult
     func open(_ folder: FolderItem) -> Bool {
         NSWorkspace.shared.open(folder.url)
@@ -47,7 +78,6 @@ final class FolderStore {
     /// Opens the case journal, creating it from the template when missing.
     /// `NSWorkspace.open` lets LaunchServices pick the app for `.md`, which is
     /// what "let Finder decide" means here — no hard-coded editor.
-    /// - Returns: true when the file had to be created.
     @discardableResult
     func openJournal(for folder: FolderItem) throws -> Bool {
         let (journalURL, created) = try Journal.ensureExists(folder)
@@ -56,10 +86,54 @@ final class FolderStore {
         }
         return created
     }
+
+    /// Menu entry point: open the journal of the selected row, reporting any
+    /// failure through `journalError` so the window can alert.
+    func openJournalOfSelection() {
+        guard let folder = target else { return }
+        selection = folder.id
+        do {
+            try openJournal(for: folder)
+        } catch {
+            journalError = error.localizedDescription
+        }
+    }
+
+    func requestNewSag() {
+        showingNewSag = true
+    }
+
+    func requestSearchFocus() {
+        searchFocusRequests += 1
+    }
+
+    func clearSearch() {
+        query = ""
+        requestSearchFocus()
+    }
 }
 
-/// Command-line surface, so the scanning, filtering and journal naming can be
-/// checked without a window:
+/// `--root <path>` for the GUI too, so the app can be pointed at a throwaway
+/// tree instead of the real archive.
+enum LaunchArguments {
+    static func root(_ arguments: [String]) -> URL {
+        var root = FolderScanner.defaultRoot
+        var index = 1
+
+        while index < arguments.count {
+            if arguments[index] == "--root", index + 1 < arguments.count {
+                root = URL(filePath: arguments[index + 1], directoryHint: .isDirectory)
+                index += 1
+            }
+            index += 1
+        }
+
+        return root
+    }
+}
+
+/// Command-line surface, so scanning, filtering, sorting, journal naming and
+/// creation can be checked without a window:
 ///   SagerBrowser --list [--query hpc] [--root <path>] [--sort name|modified]
 ///                      [--journals | --ensure-journals]
 ///   SagerBrowser --list --next                  (next sagsnummer)

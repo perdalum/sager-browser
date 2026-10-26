@@ -2,26 +2,14 @@ import SwiftUI
 
 /// Search field on top, one row per matching folder below.
 /// Return or a double-click opens the row's folder in Finder.
+///
+/// All window state lives in `FolderStore`, so the menu bar can drive the same
+/// actions without this view having to publish anything.
 struct ContentView: View {
     @Environment(FolderStore.self) private var store
-
-    @State private var query = ""
-    @State private var selection: FolderItem.ID?
-    @State private var journalError: String?
-    @State private var showingNewSag = false
     @FocusState private var searchFocused: Bool
 
-    private var visible: [FolderItem] {
-        FolderScanner.matching(store.folders, query: query)
-    }
-
-    /// The row Return should act on: the selected one, else the first match.
-    private var target: FolderItem? {
-        if let selection, let hit = visible.first(where: { $0.id == selection }) {
-            return hit
-        }
-        return visible.first
-    }
+    private var visible: [FolderItem] { store.visibleFolders }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,41 +20,48 @@ struct ContentView: View {
             statusBar
         }
         .frame(minWidth: 580, minHeight: 440)
-        .onAppear {
-            searchFocused = true
-            selection = visible.first?.id
-        }
-        .onChange(of: query) {
-            selection = visible.first?.id
-        }
-        .sheet(isPresented: $showingNewSag) {
+        .onAppear { searchFocused = true }
+        .onChange(of: store.query) { store.selectFirstVisible() }
+        .onChange(of: store.searchFocusRequests) { searchFocused = true }
+        .sheet(isPresented: showingNewSag) {
             NewSagSheet(
                 root: store.root,
                 number: NewSag.nextNumber(after: store.folders),
                 onCreate: { folder in
                     store.reload()
-                    selection = folder.id
+                    store.selection = folder.id
                 }
             )
         }
         .alert("Could not open the journal", isPresented: showingJournalError) {
-            Button("OK", role: .cancel) { journalError = nil }
+            Button("OK", role: .cancel) { store.journalError = nil }
         } message: {
-            Text(journalError ?? "")
+            Text(store.journalError ?? "")
         }
     }
 
+    // MARK: - Bindings into the store
+
+    private var searchText: Binding<String> {
+        Binding(get: { store.query }, set: { store.query = $0 })
+    }
+
+    private var selectedRow: Binding<FolderItem.ID?> {
+        Binding(get: { store.selection }, set: { store.selection = $0 })
+    }
+
     private var sortBinding: Binding<SortOrder> {
-        Binding(
-            get: { store.sortOrder },
-            set: { store.sortOrder = $0 }
-        )
+        Binding(get: { store.sortOrder }, set: { store.sortOrder = $0 })
+    }
+
+    private var showingNewSag: Binding<Bool> {
+        Binding(get: { store.showingNewSag }, set: { store.showingNewSag = $0 })
     }
 
     private var showingJournalError: Binding<Bool> {
         Binding(
-            get: { journalError != nil },
-            set: { if !$0 { journalError = nil } }
+            get: { store.journalError != nil },
+            set: { if !$0 { store.journalError = nil } }
         )
     }
 
@@ -77,21 +72,20 @@ struct ContentView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
 
-            TextField("Search folders (space = all words)", text: $query)
+            TextField("Search folders (space = all words)", text: searchText)
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
-                .onSubmit(openSelection)
+                .onSubmit { store.openSelection() }
 
-            if !query.isEmpty {
+            if !store.query.isEmpty {
                 Button {
-                    query = ""
-                    searchFocused = true
+                    store.clearSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
-                .help("Clear search")
+                .help("Clear search (⇧⌘F)")
             }
 
             Divider()
@@ -106,7 +100,7 @@ struct ContentView: View {
             .labelsHidden()
             .controlSize(.small)
             .frame(width: 140)
-            .help("Sort rows by folder name or by last modification")
+            .help("Sort rows by folder name (⌘1) or last modification (⌘2)")
 
             Text("\(visible.count)/\(store.folders.count)")
                 .font(.caption.monospacedDigit())
@@ -114,23 +108,21 @@ struct ContentView: View {
                 .help("Showing \(visible.count) of \(store.folders.count) folders")
 
             Button {
-                showingNewSag = true
+                store.requestNewSag()
             } label: {
                 Image(systemName: "plus")
             }
             .buttonStyle(.borderless)
             .help("New sag (⌘N)")
-            .keyboardShortcut("n", modifiers: .command)
 
             Button {
                 store.reload()
-                selection = visible.first?.id
+                store.selectFirstVisible()
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(.borderless)
             .help("Reload (⌘R)")
-            .keyboardShortcut("r", modifiers: .command)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -147,22 +139,25 @@ struct ContentView: View {
             } description: {
                 Text("\(store.displayRoot)\n\n\(error)")
             } actions: {
-                Button("Try Again") { store.reload() }
+                Button("Try Again") {
+                    store.reload()
+                    store.selectFirstVisible()
+                }
             }
         } else if visible.isEmpty {
-            ContentUnavailableView.search(text: query)
+            ContentUnavailableView.search(text: store.query)
         } else {
             folderList
         }
     }
 
     private var folderList: some View {
-        List(visible, selection: $selection) { folder in
+        List(visible, selection: selectedRow) { folder in
             row(folder)
         }
         .listStyle(.inset)
         .onKeyPress(.return) {
-            openSelection()
+            store.openSelection()
             return .handled
         }
     }
@@ -190,7 +185,7 @@ struct ContentView: View {
         // simultaneousGesture keeps List's own single-click selection working.
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
-                selection = folder.id
+                store.selection = folder.id
                 store.open(folder)
             }
         )
@@ -206,7 +201,7 @@ struct ContentView: View {
         do {
             try store.openJournal(for: folder)
         } catch {
-            journalError = error.localizedDescription
+            store.journalError = error.localizedDescription
         }
     }
 
@@ -226,12 +221,6 @@ struct ContentView: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-    }
-
-    private func openSelection() {
-        guard let folder = target else { return }
-        selection = folder.id
-        store.open(folder)
     }
 }
 

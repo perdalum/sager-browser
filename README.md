@@ -55,6 +55,23 @@ inside an `.app`, so LaunchServices treats it as an accessory process.
 The header shows `matches/total`, the footer shows the scanned path and the
 open hint.
 
+## Menus and shortcuts
+
+| Menu | Item | Shortcut |
+| --- | --- | --- |
+| File | New sag… | ⌘N |
+| File | Open in Finder | ⌘O |
+| File | Open Journal | ⌘J |
+| File | Reload | ⌘R |
+| Edit | Find… (focus search field) | ⌘F |
+| Edit | Clear Search | ⇧⌘F |
+| View | Sort by Name | ⌘1 |
+| View | Sort by Modified | ⌘2 |
+
+The window's state (query, selection, sheet flags) lives in `FolderStore`, so the
+menu items drive the same actions the buttons do instead of going through
+`FocusedValues` — they stay enabled even while a different control has focus.
+
 ## Headless check (no window)
 
 ```bash
@@ -84,6 +101,7 @@ SagerBrowser/
 │   ├── Journal.swift           journal file naming + template
 │   ├── NewSag.swift           next number, folder + journal creation
 │   ├── NewSagSheet.swift      "New sag" sheet (description field)
+│   ├── SagerCommands.swift     menu bar items + keyboard shortcuts
 │   └── FolderScanner.swift     pure scanning/filtering/sorting/path display
 ├── Resources/Info.plist
 ├── build.sh

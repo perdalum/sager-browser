@@ -15,7 +15,7 @@ enum SagerBrowserMain {
 }
 
 struct SagerBrowserApp: App {
-    @State private var store = FolderStore()
+    @State private var store = FolderStore(root: LaunchArguments.root(CommandLine.arguments))
 
     var body: some Scene {
         WindowGroup("Sager") {
@@ -24,13 +24,7 @@ struct SagerBrowserApp: App {
         }
         .defaultSize(width: 680, height: 520)
         .commands {
-            CommandGroup(replacing: .newItem) {}
-            CommandGroup(after: .toolbar) {
-                Button("Reload") {
-                    store.reload()
-                }
-                .keyboardShortcut("r", modifiers: .command)
-            }
+            SagerCommands(store: store)
         }
     }
 }
