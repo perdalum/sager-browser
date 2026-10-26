@@ -8,6 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(FolderStore.self) private var store
     @FocusState private var searchFocused: Bool
+    @FocusState private var listFocused: Bool
 
     private var visible: [FolderItem] { store.visibleFolders }
 
@@ -23,6 +24,7 @@ struct ContentView: View {
         .onAppear { searchFocused = true }
         .onChange(of: store.query) { store.selectFirstVisible() }
         .onChange(of: store.searchFocusRequests) { searchFocused = true }
+        .onChange(of: store.listFocusRequests) { listFocused = true }
         .sheet(isPresented: showingNewSag) {
             NewSagSheet(
                 root: store.root,
@@ -166,6 +168,7 @@ struct ContentView: View {
             row(folder)
         }
         .listStyle(.inset)
+        .focused($listFocused)
         .onKeyPress(.return) {
             store.openSelection()
             return .handled

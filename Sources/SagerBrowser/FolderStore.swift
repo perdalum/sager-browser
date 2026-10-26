@@ -24,6 +24,7 @@ final class FolderStore {
     var errorTitle = "Could not open the journal"
     var errorMessage: String?
     private(set) var searchFocusRequests = 0
+    private(set) var listFocusRequests = 0
 
     /// Choosing another order re-sorts what is already in memory.
     var sortOrder: SortOrder = .name {
@@ -150,6 +151,10 @@ final class FolderStore {
 
     func requestSearchFocus() {
         searchFocusRequests += 1
+    }
+
+    func requestListFocus() {
+        listFocusRequests += 1
     }
 
     func clearSearch() {

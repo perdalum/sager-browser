@@ -34,11 +34,13 @@ struct SagerCommands: Commands {
             .keyboardShortcut("r", modifiers: .command)
         }
 
-        // Edit > Find… (⌘F), Clear Search (⇧⌘F)
+        // Edit > Focus Search Field (⌘F), Focus List (⌘L), Clear Search (⇧⌘F)
         CommandGroup(after: .pasteboard) {
             Divider()
-            Button("Find…") { store.requestSearchFocus() }
+            Button("Focus Search Field") { store.requestSearchFocus() }
                 .keyboardShortcut("f", modifiers: .command)
+            Button("Focus List") { store.requestListFocus() }
+                .keyboardShortcut("l", modifiers: .command)
             Button("Clear Search") { store.clearSearch() }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
         }

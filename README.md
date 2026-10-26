@@ -43,7 +43,8 @@ inside an `.app`, so LaunchServices treats it as an accessory process.
 | Action | Result |
 | --- | --- |
 | Type in the field | case- and diacritic-insensitive substring filter; space-separated words are AND'ed (`chc hpc` = "chc" **and** "hpc"); the first match is selected automatically |
-| ↑ / ↓ | move the selection |
+| ⌘F / ⌘L | move keyboard focus to the search field / to the folder list |
+| ↑ / ↓ | move the selection (the list must have focus) |
 | Return | open the selected folder (works from the search field *and* from the list) |
 | Double-click a row | open that folder |
 | 📄 button on a row | open `sag <sagsnummer> -- journal.md` from that folder; created from a template if missing |
@@ -65,7 +66,8 @@ open hint.
 | File | Open Journal | ⌘J |
 | File | Open Today's Dailies | ⌘D |
 | File | Reload | ⌘R |
-| Edit | Find… (focus search field) | ⌘F |
+| Edit | Focus Search Field | ⌘F |
+| Edit | Focus List | ⌘L |
 | Edit | Clear Search | ⇧⌘F |
 | View | Sort by Name | ⌘1 |
 | View | Sort by Modified | ⌘2 |
