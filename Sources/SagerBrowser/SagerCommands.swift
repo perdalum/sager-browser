@@ -23,6 +23,9 @@ struct SagerCommands: Commands {
             Button("Open Journal") { store.openJournalOfSelection() }
                 .keyboardShortcut("j", modifiers: .command)
                 .disabled(store.target == nil)
+            Button("Open Today's Dailies") { store.openTodaysDailies() }
+                .keyboardShortcut("d", modifiers: .command)
+                .disabled(!store.isDailiesConfigured)
             Divider()
             Button("Reload") {
                 store.reload()

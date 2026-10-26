@@ -20,7 +20,9 @@ final class FolderStore {
     var query = ""
     var selection: FolderItem.ID?
     var showingNewSag = false
-    var journalError: String?
+    /// Title + text of the alert the window should show, if any.
+    var errorTitle = "Could not open the journal"
+    var errorMessage: String?
     private(set) var searchFocusRequests = 0
 
     /// Choosing another order re-sorts what is already in memory.
@@ -95,15 +97,51 @@ final class FolderStore {
     }
 
     /// Menu entry point: open the journal of the selected row, reporting any
-    /// failure through `journalError` so the window can alert.
+    /// failure through `errorMessage` so the window can alert.
     func openJournalOfSelection() {
         guard let folder = target else { return }
         selection = folder.id
         do {
             try openJournal(for: folder)
         } catch {
-            journalError = error.localizedDescription
+            fail("Could not open the journal", error)
         }
+    }
+
+    // MARK: - Dailies
+
+    var isDailiesConfigured: Bool { settings.isDailiesConfigured }
+
+    /// `<dailies folder>/yyyy-MM-dd.md` for today.
+    var todayDailiesURL: URL? {
+        isDailiesConfigured ? Dailies.url(in: settings.dailiesFolderURL) : nil
+    }
+
+    /// Opens today's note, creating it from the template when missing — the
+    /// same two-step the journal button uses.
+    func openTodaysDailies() {
+        guard isDailiesConfigured else {
+            errorTitle = "No dailies folder"
+            errorMessage = DailiesError.folderNotConfigured.localizedDescription
+            return
+        }
+
+        do {
+            let (url, _) = try Dailies.ensureExists(
+                in: settings.dailiesFolderURL,
+                template: settings.dailiesTemplate
+            )
+            guard NSWorkspace.shared.open(url) else {
+                throw DailiesError.couldNotOpen(url.lastPathComponent)
+            }
+        } catch {
+            fail("Could not open the dailies", error)
+        }
+    }
+
+    private func fail(_ title: String, _ error: Error) {
+        errorTitle = title
+        errorMessage = error.localizedDescription
     }
 
     func requestNewSag() {
@@ -148,6 +186,22 @@ enum CommandLineMode {
         arguments.contains("--list")
     }
 
+    /// "2026-10-26" as typed on the command line.
+    private static func parseDay(_ text: String) -> Date? {
+        let parts = text.split(separator: "-")
+        guard parts.count == 3,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2])
+        else { return nil }
+
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return Calendar.current.date(from: components)
+    }
+
     static func run(_ arguments: [String]) -> Int32 {
         var root = FolderScanner.defaultRoot
         var query = ""
@@ -158,6 +212,10 @@ enum CommandLineMode {
         var printNextNumber = false
         var template = AppSettings.stored().journalTemplate
         var printSettings = false
+        var reportDailies = false
+        var ensureDailies = false
+        var dailiesFolder = AppSettings.stored().dailiesFolderPath
+        var day = Date.now
         var index = 1
 
         while index < arguments.count {
@@ -186,6 +244,18 @@ enum CommandLineMode {
                 if index < arguments.count { template = arguments[index] }
             case "--settings":
                 printSettings = true
+            case "--dailies":
+                reportDailies = true
+            case "--ensure-dailies":
+                ensureDailies = true
+            case "--dailies-folder":
+                index += 1
+                if index < arguments.count { dailiesFolder = arguments[index] }
+            case "--date":
+                index += 1
+                if index < arguments.count, let parsed = parseDay(arguments[index]) {
+                    day = parsed
+                }
             case "--create":
                 index += 1
                 if index < arguments.count { createDescription = arguments[index] }
@@ -198,9 +268,38 @@ enum CommandLineMode {
         if printSettings {
             let settings = AppSettings.stored()
             print("root: \(settings.rootPath)")
-            print("template:")
+            print("journal template:")
             print(settings.journalTemplate)
+            print("dailies folder: \(settings.dailiesFolderPath)")
+            print("dailies template:")
+            print(settings.dailiesTemplate)
             return 0
+        }
+
+        if reportDailies || ensureDailies {
+            let folder = URL(filePath: dailiesFolder, directoryHint: .isDirectory)
+            let fileURL = Dailies.url(in: folder, date: day)
+            let shown = FolderScanner.displayPath(fileURL)
+
+            if reportDailies {
+                let state = Dailies.exists(in: folder, date: day) ? "exists" : "missing"
+                print("\(shown) [\(state)]")
+                return 0
+            }
+
+            let settings = AppSettings.stored()
+            do {
+                let (url, created) = try Dailies.ensureExists(
+                    in: folder,
+                    template: settings.dailiesTemplate,
+                    date: day
+                )
+                print("\(FolderScanner.displayPath(url)) [\(created ? "created" : "exists")]")
+                return 0
+            } catch {
+                FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
+                return 1
+            }
         }
 
         do {

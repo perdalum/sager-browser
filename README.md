@@ -49,6 +49,7 @@ inside an `.app`, so LaunchServices treats it as an accessory process.
 | 📄 button on a row | open `sag <sagsnummer> -- journal.md` from that folder; created from a template if missing |
 | Esc in the field | (system default) clears focus, not the query — use the ⊗ button to clear |
 | + (⌘N) | new sag: asks for a description, creates `sag <next> -- <description>` and its journal, selects the new folder |
+| 📅 button (header) | open today's daily note `yyyy-MM-dd.md` in the dailies folder, created from a template if missing |
 | Name / Modified (header) | segmented control: sort by folder name, or newest modification first |
 | ⌘R | rescan the folder |
 
@@ -62,6 +63,7 @@ open hint.
 | File | New sag… | ⌘N |
 | File | Open in Finder | ⌘O |
 | File | Open Journal | ⌘J |
+| File | Open Today's Dailies | ⌘D |
 | File | Reload | ⌘R |
 | Edit | Find… (focus search field) | ⌘F |
 | Edit | Clear Search | ⇧⌘F |
@@ -81,6 +83,8 @@ menu items drive the same actions the buttons do instead of going through
 | --- | --- | --- |
 | Root folder | `~/OneDrive - Aarhus universitet/pkm/styring/sager` | which folder is scanned; **Choose…** opens a folder panel, **Default** restores the OneDrive path. Editing the path rescans immediately. |
 | Journal template | the skeleton below | contents of a journal file created from scratch |
+| Dailies folder | `~/OneDrive - Aarhus universitet/pkm/dailies` | where `yyyy-MM-dd.md` lives; **Choose…** picks another one, **Default** restores the path. A missing folder is created on first use. |
+| Dailies template | `# {dato} ({dag})` + sections | contents of a daily note created from scratch |
 
 The template placeholders are `{sagsnummer}`, `{mappe}` and `{dato}`; everything
 else is written verbatim. The default is
@@ -95,9 +99,20 @@ else is written verbatim. The default is
 ## Log
 ```
 
-An existing journal is never rewritten, so changing the template only affects
-files created later. The Preferences window shows a live preview rendered from
-the first folder in the current list.
+The dailies template uses `{dato}` (`yyyy-MM-dd`), `{dag}` (Danish weekday) and
+`{uge}` (ISO week number); its default is
+
+```markdown
+# {dato} ({dag})
+
+## Vigtige ting
+
+## Andre ting
+```
+
+An existing journal or daily note is never rewritten, so changing a template
+only affects files created later. Both sections show a live preview: journals
+render against the first folder in the current list, dailies against today.
 
 `--root <path>` on the command line overrides the preference for that launch
 only; it is not saved back.
@@ -115,7 +130,12 @@ only; it is not saved back.
 .build/release/SagerBrowser --list --ensure-journals   # create missing journals (combine with --root to sandbox it)
 .build/release/SagerBrowser --list --settings         # the persisted preferences
 .build/release/SagerBrowser --list --ensure-journals --root /tmp/x --template 'Hi {sagsnummer} on {dato}'
+.build/release/SagerBrowser --list --dailies --dailies-folder /tmp/d --date 2026-01-02   # path + exists/missing
+.build/release/SagerBrowser --list --ensure-dailies --dailies-folder /tmp/d --date 2026-01-02  # create it
 ```
+
+`--settings` prints all four persisted values. `--date` takes a `yyyy-MM-dd`
+date so the file name, weekday and week number can be checked for any day.
 
 Prints the root, the counts and the matching names; exits `1` with a message
 when the root cannot be read. This is the same code path the window uses, which
@@ -133,6 +153,7 @@ SagerBrowser/
 │   ├── AppSettings.swift       persisted root folder + journal template
 │   ├── PreferencesView.swift   ⌘, window: root folder, template, preview
 │   ├── Journal.swift           journal file naming + template rendering
+│   ├── Dailies.swift           yyyy-MM-dd.md naming, weekdays, ISO week
 │   ├── NewSag.swift           next number, folder + journal creation
 │   ├── NewSagSheet.swift      "New sag" sheet (description field)
 │   ├── SagerCommands.swift     menu bar items + keyboard shortcuts
@@ -160,6 +181,13 @@ SagerBrowser/
   one is never touched. Opening goes
   through `NSWorkspace.shared.open`, so LaunchServices — not the app — decides
   which editor a `.md` opens in.
+- **Dailies:** `<dailies folder>/yyyy-MM-dd.md` for today. The name is built
+  from `Calendar.current` components rather than `Date.ISO8601FormatStyle`, which
+  formats in UTC — a note started at 00:30 local time would otherwise be filed
+  under the previous day. `{dag}` is the Danish weekday (`torsdag`), matching the
+  older notes in `pkm/dailies`, and `{uge}` is the ISO week. A missing dailies
+  folder is created with `createDirectory(withIntermediateDirectories:)`, so a
+  fresh OneDrive subfolder needs no setup; an existing file is opened untouched.
 - **Scanning:** `FileManager.contentsOfDirectory(at:includingPropertiesForKeys:)`
   with `isDirectoryKey`. Names must start with `sag ` (case-sensitive, trailing
   space included) and be real folders; hidden entries are skipped.
@@ -187,5 +215,6 @@ SagerBrowser/
 
 - No file-system watcher: new OneDrive folders show up after ⌘R or relaunch.
 - Single selection only; no "reveal in parent folder"; no per-case notes or tags.
+- Dailies only ever open *today's* note; there is no picker for another date.
 - Ad-hoc signed, so it runs locally but is not distributable as-is
   (that would need Developer ID signing and notarisation).

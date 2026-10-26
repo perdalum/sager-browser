@@ -34,10 +34,10 @@ struct ContentView: View {
                 }
             )
         }
-        .alert("Could not open the journal", isPresented: showingJournalError) {
-            Button("OK", role: .cancel) { store.journalError = nil }
+        .alert(store.errorTitle, isPresented: showingError) {
+            Button("OK", role: .cancel) { store.errorMessage = nil }
         } message: {
-            Text(store.journalError ?? "")
+            Text(store.errorMessage ?? "")
         }
     }
 
@@ -59,10 +59,10 @@ struct ContentView: View {
         Binding(get: { store.showingNewSag }, set: { store.showingNewSag = $0 })
     }
 
-    private var showingJournalError: Binding<Bool> {
+    private var showingError: Binding<Bool> {
         Binding(
-            get: { store.journalError != nil },
-            set: { if !$0 { store.journalError = nil } }
+            get: { store.errorMessage != nil },
+            set: { if !$0 { store.errorMessage = nil } }
         )
     }
 
@@ -107,6 +107,15 @@ struct ContentView: View {
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .help("Showing \(visible.count) of \(store.folders.count) folders")
+
+            Button {
+                store.openTodaysDailies()
+            } label: {
+                Image(systemName: "calendar")
+            }
+            .buttonStyle(.borderless)
+            .disabled(!store.isDailiesConfigured)
+            .help(dailiesHelp)
 
             Button {
                 store.requestNewSag()
@@ -202,8 +211,17 @@ struct ContentView: View {
         do {
             try store.openJournal(for: folder)
         } catch {
-            store.journalError = error.localizedDescription
+            store.errorTitle = "Could not open the journal"
+            store.errorMessage = error.localizedDescription
         }
+    }
+
+    /// "Today's dailies: 2026-10-26.md in ~/…/pkm/dailies"
+    private var dailiesHelp: String {
+        guard let url = store.todayDailiesURL else {
+            return "No dailies folder set — choose one in Settings… (⌘,)"
+        }
+        return "Open today's dailies (\(url.lastPathComponent)) — ⌘D"
     }
 
     // MARK: - Footer

@@ -50,6 +50,15 @@ enum FolderScanner {
             )
     }
 
+    /// ~/OneDrive - Aarhus universitet/pkm/dailies
+    static var defaultDailiesFolder: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appending(
+                path: "OneDrive - Aarhus universitet/pkm/dailies",
+                directoryHint: .isDirectory
+            )
+    }
+
     /// Folders directly inside `root` whose name starts with `prefix`.
     /// Returned in no particular order; `sorted(_:by:)` applies the choice.
     static func scan(root: URL, prefix: String = namePrefix) throws -> [FolderItem] {

@@ -60,9 +60,57 @@ struct PreferencesView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+
+            Section("Dailies") {
+                LabeledContent("Folder") {
+                    HStack(spacing: 6) {
+                        TextField("Path", text: dailiesFolderPath)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.callout)
+
+                        Button("Choose…") { chooseDailiesFolder() }
+                        Button("Default") {
+                            settings.resetDailiesFolder()
+                        }
+                        .disabled(settings.isUsingDefaultDailiesFolder)
+                    }
+                }
+
+                Text(dailiesStatus)
+                    .font(.caption)
+                    .foregroundStyle(dailiesFolderExists ? Color.secondary : Color.red)
+
+                TextEditor(text: dailiesTemplate)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(minHeight: 120)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(.quaternary)
+                    }
+
+                HStack {
+                    Text("Placeholders: {dato}, {dag}, {uge} · file name is yyyy-MM-dd.md")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button("Restore Default") {
+                        settings.resetDailiesTemplate()
+                    }
+                    .disabled(settings.dailiesTemplateIsDefault)
+                }
+
+                DisclosureGroup("Preview (today)") {
+                    Text(dailiesPreview)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 520)
+        .frame(width: 560, height: 720)
         .onChange(of: settings.rootPath) { store.reload() }
     }
 
@@ -74,6 +122,14 @@ struct PreferencesView: View {
 
     private var journalTemplate: Binding<String> {
         Binding(get: { settings.journalTemplate }, set: { settings.journalTemplate = $0 })
+    }
+
+    private var dailiesFolderPath: Binding<String> {
+        Binding(get: { settings.dailiesFolderPath }, set: { settings.dailiesFolderPath = $0 })
+    }
+
+    private var dailiesTemplate: Binding<String> {
+        Binding(get: { settings.dailiesTemplate }, set: { settings.dailiesTemplate = $0 })
     }
 
     // MARK: - Derived values
@@ -97,6 +153,31 @@ struct PreferencesView: View {
         return "\(store.folders.count) folders starting with \"sag \""
     }
 
+    private var dailiesFolderExists: Bool {
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(
+            atPath: settings.dailiesFolderPath,
+            isDirectory: &isDirectory
+        )
+        return exists && isDirectory.boolValue
+    }
+
+    private var dailiesStatus: String {
+        guard settings.isDailiesConfigured else {
+            return "No folder set — ⌘D is disabled until you pick one."
+        }
+        guard dailiesFolderExists else {
+            return "Folder does not exist yet; it is created when the first note is opened."
+        }
+        let today = Dailies.url(in: settings.dailiesFolderURL)
+        let exists = Dailies.exists(in: settings.dailiesFolderURL)
+        return "\(exists ? "Today's file exists: " : "Today's file will be created as ")\(today.lastPathComponent)"
+    }
+
+    private var dailiesPreview: String {
+        Dailies.render(template: settings.dailiesTemplate)
+    }
+
     private var preview: String {
         let sample = store.folders.first
             ?? FolderItem(
@@ -107,6 +188,19 @@ struct PreferencesView: View {
     }
 
     // MARK: - Actions
+
+    private func chooseDailiesFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = settings.dailiesFolderURL
+        panel.prompt = "Choose"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        settings.dailiesFolderPath = FolderScanner.path(of: url)
+    }
 
     private func chooseRoot() {
         let panel = NSOpenPanel()
