@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-10-26
+
+### Added
+
+- Terminal button on every row, and File ▸ Open in Terminal (⌥⌘T), which opens
+  the case folder in Terminal via LaunchServices — a new window already in that
+  directory, with no shell script and no Apple events.
+
 ## [1.0.0] - 2026-10-26
 
 ### Added

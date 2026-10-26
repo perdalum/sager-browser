@@ -203,6 +203,15 @@ struct ContentView: View {
             Spacer(minLength: 8)
 
             Button {
+                store.openInTerminal(for: folder)
+            } label: {
+                Image(systemName: "apple.terminal")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Open \(folder.name) in Terminal (⌥⌘T)")
+
+            Button {
                 openJournal(folder)
             } label: {
                 Image(systemName: "doc.text")

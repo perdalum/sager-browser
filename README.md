@@ -50,6 +50,7 @@ inside an `.app`, so LaunchServices treats it as an accessory process.
 | Return | open the selected folder (works from the search field *and* from the list) |
 | Double-click a row | open that folder |
 | 📄 button on a row | open `sag <sagsnummer> -- journal.md` from that folder; created from a template if missing |
+| terminal button on a row | open that folder in Terminal — a new window already sitting in the case folder |
 | Esc | clear the search field and put the caret back in it (works from the field and from the list); in a sheet, Esc still cancels the sheet |
 | + (⌘N) | new sag: asks for a description, creates `sag <next> -- <description>` and its journal, selects the new folder |
 | 📅 button (header) | open today's daily note `yyyy-MM-dd.md` in the dailies folder, created from a template if missing |
@@ -66,6 +67,7 @@ open hint.
 | File | New sag… | ⌘N |
 | File | Open in Finder | ⌘O |
 | File | Open Journal | ⌘J |
+| File | Open in Terminal | ⌥⌘T |
 | File | Open Today's Dailies | ⌘D |
 | File | Reload | ⌘R |
 | Edit | Focus Search Field | ⌘F |
@@ -177,6 +179,7 @@ SagerBrowser/
 │   ├── PreferencesView.swift   ⌘, window: folders, templates, previews
 │   ├── Journal.swift           journal file naming + template rendering
 │   ├── Dailies.swift           yyyy-MM-dd.md naming, weekdays, ISO week
+│   ├── Terminal.swift          open a folder in Terminal via LaunchServices
 │   ├── NewSag.swift           next number, folder + journal creation
 │   ├── NewSagSheet.swift      "New sag" sheet (description field)
 │   ├── SagerCommands.swift     menu bar items + keyboard shortcuts
@@ -210,6 +213,12 @@ SagerBrowser/
   one is never touched. Opening goes
   through `NSWorkspace.shared.open`, so LaunchServices — not the app — decides
   which editor a `.md` opens in.
+- **Terminal:** the row's terminal button and File ▸ Open in Terminal (⌥⌘T) ask
+  LaunchServices to open the folder *with* `Terminal.app`, so Terminal opens a
+  window already in that directory. No shell command is scripted and nothing is
+  sent as an Apple event, so there is no Automation prompt either. The bundle id
+  (`com.apple.Terminal`) is resolved at call time; if Terminal is missing the
+  action reports it instead of failing silently.
 - **Dailies:** `<dailies folder>/yyyy-MM-dd.md` for today. The name is built
   from `Calendar.current` components rather than `Date.ISO8601FormatStyle`, which
   formats in UTC — a note started at 00:30 local time would otherwise be filed

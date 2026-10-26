@@ -122,6 +122,26 @@ final class FolderStore {
         }
     }
 
+    // MARK: - Terminal
+
+    /// Opens the folder in Terminal (a new window already cd'ed there).
+    func openInTerminal(for folder: FolderItem) {
+        Task {
+            do {
+                try await Terminal.open(folder.url)
+            } catch {
+                fail("Could not open Terminal", error)
+            }
+        }
+    }
+
+    /// Menu entry point for the selected row.
+    func openTerminalOfSelection() {
+        guard let folder = target else { return }
+        selection = folder.id
+        openInTerminal(for: folder)
+    }
+
     // MARK: - Dailies
 
     var isDailiesConfigured: Bool { settings.isDailiesConfigured }
