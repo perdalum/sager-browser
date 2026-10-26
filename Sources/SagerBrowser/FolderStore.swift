@@ -6,7 +6,9 @@ import Observation
 @MainActor
 @Observable
 final class FolderStore {
-    let root: URL
+    let settings: AppSettings
+    /// Set by `--root` on launch; not persisted, so the preference stays intact.
+    private let rootOverride: URL?
 
     /// What the last scan found, unsorted; `folders` is the sorted view of it.
     private var scanned: [FolderItem] = []
@@ -29,6 +31,7 @@ final class FolderStore {
         }
     }
 
+    var root: URL { rootOverride ?? settings.rootURL }
     var displayRoot: String { FolderScanner.displayPath(root) }
     var visibleFolders: [FolderItem] { FolderScanner.matching(folders, query: query) }
 
@@ -40,8 +43,9 @@ final class FolderStore {
         return visibleFolders.first
     }
 
-    init(root: URL = FolderScanner.defaultRoot) {
-        self.root = root
+    init(settings: AppSettings, rootOverride: URL? = nil) {
+        self.settings = settings
+        self.rootOverride = rootOverride
         reload()
         selection = visibleFolders.first?.id
     }
@@ -80,7 +84,10 @@ final class FolderStore {
     /// what "let Finder decide" means here — no hard-coded editor.
     @discardableResult
     func openJournal(for folder: FolderItem) throws -> Bool {
-        let (journalURL, created) = try Journal.ensureExists(folder)
+        let (journalURL, created) = try Journal.ensureExists(
+            folder,
+            template: settings.journalTemplate
+        )
         guard NSWorkspace.shared.open(journalURL) else {
             throw JournalError.couldNotOpen(journalURL.lastPathComponent)
         }
@@ -116,19 +123,17 @@ final class FolderStore {
 /// `--root <path>` for the GUI too, so the app can be pointed at a throwaway
 /// tree instead of the real archive.
 enum LaunchArguments {
-    static func root(_ arguments: [String]) -> URL {
-        var root = FolderScanner.defaultRoot
+    static func rootOverride(_ arguments: [String]) -> URL? {
         var index = 1
 
         while index < arguments.count {
             if arguments[index] == "--root", index + 1 < arguments.count {
-                root = URL(filePath: arguments[index + 1], directoryHint: .isDirectory)
-                index += 1
+                return URL(filePath: arguments[index + 1], directoryHint: .isDirectory)
             }
             index += 1
         }
 
-        return root
+        return nil
     }
 }
 
@@ -151,6 +156,8 @@ enum CommandLineMode {
         var sortOrder = SortOrder.name
         var createDescription: String?
         var printNextNumber = false
+        var template = AppSettings.stored().journalTemplate
+        var printSettings = false
         var index = 1
 
         while index < arguments.count {
@@ -174,6 +181,11 @@ enum CommandLineMode {
                 }
             case "--next":
                 printNextNumber = true
+            case "--template":
+                index += 1
+                if index < arguments.count { template = arguments[index] }
+            case "--settings":
+                printSettings = true
             case "--create":
                 index += 1
                 if index < arguments.count { createDescription = arguments[index] }
@@ -181,6 +193,14 @@ enum CommandLineMode {
                 break
             }
             index += 1
+        }
+
+        if printSettings {
+            let settings = AppSettings.stored()
+            print("root: \(settings.rootPath)")
+            print("template:")
+            print(settings.journalTemplate)
+            return 0
         }
 
         do {
@@ -216,7 +236,7 @@ enum CommandLineMode {
 
                 do {
                     if createJournals {
-                        let result = try Journal.ensureExists(folder)
+                        let result = try Journal.ensureExists(folder, template: template)
                         print("  \(result.url.lastPathComponent) [\(result.created ? "created" : "exists")] in \(folder.name)")
                     } else {
                         let name = try Journal.url(for: folder).lastPathComponent

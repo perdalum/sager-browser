@@ -112,6 +112,11 @@ enum FolderScanner {
         query.split(whereSeparator: \.isWhitespace).map(String.init)
     }
 
+    /// Absolute path without a trailing slash.
+    static func path(of url: URL) -> String {
+        trimmingTrailingSlash(url.path(percentEncoded: false))
+    }
+
     /// "/Users/me/OneDrive …/sager/" -> "~/OneDrive …/sager"
     /// (`homeDirectoryForCurrentUser` keeps a trailing slash, so strip both.)
     static func displayPath(_ url: URL) -> String {

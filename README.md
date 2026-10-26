@@ -72,6 +72,36 @@ The window's state (query, selection, sheet flags) lives in `FolderStore`, so th
 menu items drive the same actions the buttons do instead of going through
 `FocusedValues` — they stay enabled even while a different control has focus.
 
+## Preferences (⌘,)
+
+**App ▸ Settings…** opens two settings, both persisted in `UserDefaults`
+(domain `local.sagerbrowser.poc`, so the raw binary and the `.app` agree):
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| Root folder | `~/OneDrive - Aarhus universitet/pkm/styring/sager` | which folder is scanned; **Choose…** opens a folder panel, **Default** restores the OneDrive path. Editing the path rescans immediately. |
+| Journal template | the skeleton below | contents of a journal file created from scratch |
+
+The template placeholders are `{sagsnummer}`, `{mappe}` and `{dato}`; everything
+else is written verbatim. The default is
+
+```markdown
+# sag {sagsnummer} -- journal
+
+- Sagsnummer: {sagsnummer}
+- Mappe: {mappe}
+- Oprettet: {dato}
+
+## Log
+```
+
+An existing journal is never rewritten, so changing the template only affects
+files created later. The Preferences window shows a live preview rendered from
+the first folder in the current list.
+
+`--root <path>` on the command line overrides the preference for that launch
+only; it is not saved back.
+
 ## Headless check (no window)
 
 ```bash
@@ -83,6 +113,8 @@ menu items drive the same actions the buttons do instead of going through
 .build/release/SagerBrowser --list --create "AU -- text" --root /tmp/x   # create folder + journal
 .build/release/SagerBrowser --list --journals          # journal name + exists/missing, creates nothing
 .build/release/SagerBrowser --list --ensure-journals   # create missing journals (combine with --root to sandbox it)
+.build/release/SagerBrowser --list --settings         # the persisted preferences
+.build/release/SagerBrowser --list --ensure-journals --root /tmp/x --template 'Hi {sagsnummer} on {dato}'
 ```
 
 Prints the root, the counts and the matching names; exits `1` with a message
@@ -95,10 +127,12 @@ is how the folder logic can be verified without a GUI session.
 SagerBrowser/
 ├── Package.swift
 ├── Sources/SagerBrowser/
-│   ├── SagerBrowserApp.swift   @main, window, ⌘R command
+│   ├── SagerBrowserApp.swift   @main, window scene, Settings scene
 │   ├── ContentView.swift       search bar, list, footer
 │   ├── FolderStore.swift       observable state, NSWorkspace open, CLI mode
-│   ├── Journal.swift           journal file naming + template
+│   ├── AppSettings.swift       persisted root folder + journal template
+│   ├── PreferencesView.swift   ⌘, window: root folder, template, preview
+│   ├── Journal.swift           journal file naming + template rendering
 │   ├── NewSag.swift           next number, folder + journal creation
 │   ├── NewSagSheet.swift      "New sag" sheet (description field)
 │   ├── SagerCommands.swift     menu bar items + keyboard shortcuts
@@ -121,8 +155,9 @@ SagerBrowser/
 - **Journal:** `<case folder>/sag <sagsnummer> -- journal.md`. The sagsnummer is
   the first whitespace-delimited token after `sag ` in the folder name, so
   `sag 0033 - AU -- DeiC-DM` still gives `sag 0033 -- journal.md`. A missing
-  file is written from `Journal.template(for:)` (title, sagsnummer, folder,
-  creation date, `## Log`); an existing one is never touched. Opening goes
+  file is written by `Journal.render(template:for:)` from the template in
+  Preferences (`{sagsnummer}`, `{mappe}`, `{dato}` placeholders); an existing
+  one is never touched. Opening goes
   through `NSWorkspace.shared.open`, so LaunchServices — not the app — decides
   which editor a `.md` opens in.
 - **Scanning:** `FileManager.contentsOfDirectory(at:includingPropertiesForKeys:)`
@@ -143,10 +178,14 @@ SagerBrowser/
 - **Home folder:** `FileManager.homeDirectoryForCurrentUser` (the Swift
   equivalent of AppleScript's `path to home folder`); the footer shortens it
   to `~/…`.
+- **Settings:** `AppSettings` is an `@Observable` wrapper over an explicit
+  `UserDefaults(suiteName: "local.sagerbrowser.poc")`. It is passed into
+  `FolderStore`, which reads `root` and the journal template from it, so there is
+  one source of truth for both the window and the menu bar.
 
 ## Known limitations (fine for a POC)
 
 - No file-system watcher: new OneDrive folders show up after ⌘R or relaunch.
-- Single selection only; no "reveal in parent folder"; no sorting controls.
+- Single selection only; no "reveal in parent folder"; no per-case notes or tags.
 - Ad-hoc signed, so it runs locally but is not distributable as-is
   (that would need Developer ID signing and notarisation).

@@ -44,7 +44,12 @@ enum NewSag {
 
     /// Creates the case folder and its journal file.
     @discardableResult
-    static func create(description: String, in root: URL, number: Int) throws -> FolderItem {
+    static func create(
+        description: String,
+        in root: URL,
+        number: Int,
+        template: String = Journal.defaultTemplate
+    ) throws -> FolderItem {
         let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw NewSagError.emptyDescription }
         guard !trimmed.contains("/") else { throw NewSagError.slashInDescription }
@@ -61,7 +66,7 @@ enum NewSag {
         // Journal.ensureExists writes the template; the folder is brand new,
         // so this always creates the file.
         let folder = FolderItem(url: url, modified: .now)
-        _ = try Journal.ensureExists(folder)
+        _ = try Journal.ensureExists(folder, template: template)
 
         return folder
     }

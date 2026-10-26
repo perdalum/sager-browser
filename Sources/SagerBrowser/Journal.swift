@@ -54,30 +54,43 @@ enum Journal {
 
     /// Creates the journal from the template when it is missing.
     /// - Returns: the file URL and whether it had to be created.
-    static func ensureExists(_ folder: FolderItem) throws -> (url: URL, created: Bool) {
+    static func ensureExists(
+        _ folder: FolderItem,
+        template: String = defaultTemplate
+    ) throws -> (url: URL, created: Bool) {
         let journalURL = try url(for: folder)
         if FileManager.default.fileExists(atPath: journalURL.path(percentEncoded: false)) {
             return (journalURL, false)
         }
-        try template(for: folder).write(to: journalURL, atomically: true, encoding: .utf8)
+        try render(template: template, for: folder).write(to: journalURL, atomically: true, encoding: .utf8)
         return (journalURL, true)
     }
 
-    /// Minimal markdown skeleton; keeps the journal self-describing even when
-    /// it is filed away from its folder.
-    static func template(for folder: FolderItem) -> String {
+    /// The template used until the user changes it in Preferences.
+    /// `{sagsnummer}`, `{mappe}` and `{dato}` are the placeholders.
+    static let defaultTemplate = """
+    # sag {sagsnummer} \(baseName)
+
+    - Sagsnummer: {sagsnummer}
+    - Mappe: {mappe}
+    - Oprettet: {dato}
+
+    ## Log
+
+    """
+
+    /// Fills the placeholders of a (possibly user-edited) template.
+    static func render(template: String, for folder: FolderItem) -> String {
         let number = sagsnummer(forFolderNamed: folder.name) ?? "?"
-        let created = Date.now.formatted(.iso8601.year().month().day())
 
-        return """
-        # sag \(number) \(baseName)
+        return template
+            .replacingOccurrences(of: "{sagsnummer}", with: number)
+            .replacingOccurrences(of: "{mappe}", with: folder.name)
+            .replacingOccurrences(of: "{dato}", with: Date.now.formatted(.iso8601.year().month().day()))
+    }
 
-        - Sagsnummer: \(number)
-        - Mappe: \(folder.name)
-        - Oprettet: \(created)
-
-        ## Log
-
-        """
+    /// The template rendered with the default skeleton.
+    static func template(for folder: FolderItem) -> String {
+        render(template: defaultTemplate, for: folder)
     }
 }

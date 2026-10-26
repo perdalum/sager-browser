@@ -27,6 +27,7 @@ struct ContentView: View {
             NewSagSheet(
                 root: store.root,
                 number: NewSag.nextNumber(after: store.folders),
+                template: store.settings.journalTemplate,
                 onCreate: { folder in
                     store.reload()
                     store.selection = folder.id
@@ -226,5 +227,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .environment(FolderStore(root: FolderScanner.defaultRoot))
+        .environment(FolderStore(settings: AppSettings()))
 }

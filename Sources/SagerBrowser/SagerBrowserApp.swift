@@ -15,7 +15,19 @@ enum SagerBrowserMain {
 }
 
 struct SagerBrowserApp: App {
-    @State private var store = FolderStore(root: LaunchArguments.root(CommandLine.arguments))
+    @State private var settings: AppSettings
+    @State private var store: FolderStore
+
+    init() {
+        let settings = AppSettings()
+        _settings = State(initialValue: settings)
+        _store = State(
+            initialValue: FolderStore(
+                settings: settings,
+                rootOverride: LaunchArguments.rootOverride(CommandLine.arguments)
+            )
+        )
+    }
 
     var body: some Scene {
         WindowGroup("Sager") {
@@ -25,6 +37,11 @@ struct SagerBrowserApp: App {
         .defaultSize(width: 680, height: 520)
         .commands {
             SagerCommands(store: store)
+        }
+
+        Settings {
+            PreferencesView()
+                .environment(store)
         }
     }
 }

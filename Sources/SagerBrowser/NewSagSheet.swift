@@ -5,6 +5,7 @@ import SwiftUI
 struct NewSagSheet: View {
     let root: URL
     let number: Int
+    let template: String
     var onCreate: (FolderItem) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -75,7 +76,8 @@ struct NewSagSheet: View {
             let folder = try NewSag.create(
                 description: description,
                 in: root,
-                number: number
+                number: number,
+                template: template
             )
             onCreate(folder)
             dismiss()
@@ -86,5 +88,10 @@ struct NewSagSheet: View {
 }
 
 #Preview {
-    NewSagSheet(root: FolderScanner.defaultRoot, number: 79, onCreate: { _ in })
+    NewSagSheet(
+        root: FolderScanner.defaultRoot,
+        number: 79,
+        template: Journal.defaultTemplate,
+        onCreate: { _ in }
+    )
 }
