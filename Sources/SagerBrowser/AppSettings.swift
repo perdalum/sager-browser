@@ -45,20 +45,18 @@ final class AppSettings {
         didSet { defaults.set(dailiesTemplate, forKey: Key.dailiesTemplate) }
     }
 
-    nonisolated static var defaultDailiesPath: String {
-        FolderScanner.path(of: FolderScanner.defaultDailiesFolder)
+    /// Nothing is configured until the user picks a folder; there is no
+    /// baked-in default, so the app carries no personal paths.
+    var isRootConfigured: Bool {
+        !rootPath.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    nonisolated static var defaultRootPath: String {
-        FolderScanner.path(of: FolderScanner.defaultRoot)
+    var rootURL: URL? {
+        isRootConfigured ? URL(filePath: rootPath, directoryHint: .isDirectory) : nil
     }
 
-    var rootURL: URL {
-        URL(filePath: rootPath, directoryHint: .isDirectory)
-    }
-
-    var dailiesFolderURL: URL {
-        URL(filePath: dailiesFolderPath, directoryHint: .isDirectory)
+    var dailiesFolderURL: URL? {
+        isDailiesConfigured ? URL(filePath: dailiesFolderPath, directoryHint: .isDirectory) : nil
     }
 
     /// The daily-note feature needs a folder before it can do anything.
@@ -66,16 +64,8 @@ final class AppSettings {
         !dailiesFolderPath.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    var isUsingDefaultRoot: Bool {
-        rootPath == Self.defaultRootPath
-    }
-
     var templateIsDefault: Bool {
         journalTemplate == Journal.defaultTemplate
-    }
-
-    var isUsingDefaultDailiesFolder: Bool {
-        dailiesFolderPath == Self.defaultDailiesPath
     }
 
     var dailiesTemplateIsDefault: Bool {
@@ -85,14 +75,12 @@ final class AppSettings {
     init(defaults: UserDefaults = AppSettings.sharedDefaults) {
         self.defaults = defaults
 
-        let storedRoot = defaults.string(forKey: Key.rootPath) ?? ""
-        rootPath = storedRoot.isEmpty ? Self.defaultRootPath : storedRoot
+        rootPath = defaults.string(forKey: Key.rootPath) ?? ""
 
         let storedTemplate = defaults.string(forKey: Key.journalTemplate) ?? ""
         journalTemplate = storedTemplate.isEmpty ? Journal.defaultTemplate : storedTemplate
 
-        let storedDailies = defaults.string(forKey: Key.dailiesFolderPath) ?? ""
-        dailiesFolderPath = storedDailies.isEmpty ? Self.defaultDailiesPath : storedDailies
+        dailiesFolderPath = defaults.string(forKey: Key.dailiesFolderPath) ?? ""
 
         let storedDailiesTemplate = defaults.string(forKey: Key.dailiesTemplate) ?? ""
         dailiesTemplate = storedDailiesTemplate.isEmpty
@@ -109,23 +97,15 @@ final class AppSettings {
         let dailies = defaults.string(forKey: Key.dailiesFolderPath) ?? ""
         let dailiesTemplate = defaults.string(forKey: Key.dailiesTemplate) ?? ""
         return (
-            root.isEmpty ? defaultRootPath : root,
+            root,
             template.isEmpty ? Journal.defaultTemplate : template,
-            dailies.isEmpty ? defaultDailiesPath : dailies,
+            dailies,
             dailiesTemplate.isEmpty ? Dailies.defaultTemplate : dailiesTemplate
         )
     }
 
-    func resetRoot() {
-        rootPath = Self.defaultRootPath
-    }
-
     func resetTemplate() {
         journalTemplate = Journal.defaultTemplate
-    }
-
-    func resetDailiesFolder() {
-        dailiesFolderPath = Self.defaultDailiesPath
     }
 
     func resetDailiesTemplate() {

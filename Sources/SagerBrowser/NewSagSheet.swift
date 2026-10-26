@@ -89,7 +89,7 @@ struct NewSagSheet: View {
 
 #Preview {
     NewSagSheet(
-        root: FolderScanner.defaultRoot,
+        root: URL(filePath: "/tmp/sager-preview", directoryHint: .isDirectory),
         number: 79,
         template: Journal.defaultTemplate,
         onCreate: { _ in }

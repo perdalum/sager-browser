@@ -31,7 +31,7 @@ struct ContentView: View {
         .onChange(of: store.listFocusRequests) { listFocused = true }
         .sheet(isPresented: showingNewSag) {
             NewSagSheet(
-                root: store.root,
+                root: store.root ?? FileManager.default.homeDirectoryForCurrentUser,
                 number: NewSag.nextNumber(after: store.folders),
                 template: store.settings.journalTemplate,
                 onCreate: { folder in
@@ -132,6 +132,7 @@ struct ContentView: View {
                 Image(systemName: "plus")
             }
             .buttonStyle(.borderless)
+            .disabled(!store.isRootConfigured)
             .help("New sag (⌘N)")
 
             Button {
@@ -152,7 +153,17 @@ struct ContentView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let error = store.loadError {
+        if !store.isRootConfigured {
+            ContentUnavailableView {
+                Label("No folder chosen", systemImage: "folder.badge.plus")
+            } description: {
+                Text("Pick the folder that holds the \"sag …\" folders. There is no built-in default.")
+            } actions: {
+                SettingsLink {
+                    Text("Open Settings…")
+                }
+            }
+        } else if let error = store.loadError {
             ContentUnavailableView {
                 Label("Folder not available", systemImage: "folder.badge.questionmark")
             } description: {

@@ -34,8 +34,14 @@ final class FolderStore {
         }
     }
 
-    var root: URL { rootOverride ?? settings.rootURL }
-    var displayRoot: String { FolderScanner.displayPath(root) }
+    /// The folder being browsed, if one is configured.
+    var root: URL? { rootOverride ?? settings.rootURL }
+    var isRootConfigured: Bool { root != nil }
+
+    var displayRoot: String {
+        guard let root else { return "No folder chosen" }
+        return FolderScanner.displayPath(root)
+    }
     var visibleFolders: [FolderItem] { FolderScanner.matching(folders, query: query) }
 
     /// The row the menus and Return act on: the selected one, else the first match.
@@ -54,6 +60,13 @@ final class FolderStore {
     }
 
     func reload() {
+        guard let root else {
+            scanned = []
+            folders = []
+            loadError = nil
+            return
+        }
+
         do {
             scanned = try FolderScanner.scan(root: root)
             loadError = nil
@@ -115,13 +128,14 @@ final class FolderStore {
 
     /// `<dailies folder>/yyyy-MM-dd.md` for today.
     var todayDailiesURL: URL? {
-        isDailiesConfigured ? Dailies.url(in: settings.dailiesFolderURL) : nil
+        guard let folder = settings.dailiesFolderURL else { return nil }
+        return Dailies.url(in: folder)
     }
 
     /// Opens today's note, creating it from the template when missing — the
     /// same two-step the journal button uses.
     func openTodaysDailies() {
-        guard isDailiesConfigured else {
+        guard let folder = settings.dailiesFolderURL else {
             errorTitle = "No dailies folder"
             errorMessage = DailiesError.folderNotConfigured.localizedDescription
             return
@@ -129,7 +143,7 @@ final class FolderStore {
 
         do {
             let (url, _) = try Dailies.ensureExists(
-                in: settings.dailiesFolderURL,
+                in: folder,
                 template: settings.dailiesTemplate
             )
             guard NSWorkspace.shared.open(url) else {
@@ -146,6 +160,7 @@ final class FolderStore {
     }
 
     func requestNewSag() {
+        guard isRootConfigured else { return }
         showingNewSag = true
     }
 
@@ -208,18 +223,20 @@ enum CommandLineMode {
     }
 
     static func run(_ arguments: [String]) -> Int32 {
-        var root = FolderScanner.defaultRoot
+        let stored = AppSettings.stored()
+        let rootPath = stored.rootPath
+        var rootFlag: String?
         var query = ""
         var reportJournals = false
         var createJournals = false
         var sortOrder = SortOrder.name
         var createDescription: String?
         var printNextNumber = false
-        var template = AppSettings.stored().journalTemplate
+        var template = stored.journalTemplate
         var printSettings = false
         var reportDailies = false
         var ensureDailies = false
-        var dailiesFolder = AppSettings.stored().dailiesFolderPath
+        var dailiesFolder = stored.dailiesFolderPath
         var day = Date.now
         var index = 1
 
@@ -227,9 +244,7 @@ enum CommandLineMode {
             switch arguments[index] {
             case "--root":
                 index += 1
-                if index < arguments.count {
-                    root = URL(filePath: arguments[index], directoryHint: .isDirectory)
-                }
+                if index < arguments.count { rootFlag = arguments[index] }
             case "--query":
                 index += 1
                 if index < arguments.count { query = arguments[index] }
@@ -271,17 +286,22 @@ enum CommandLineMode {
         }
 
         if printSettings {
-            let settings = AppSettings.stored()
-            print("root: \(settings.rootPath)")
+            print("root: \(stored.rootPath.isEmpty ? "(not set)" : stored.rootPath)")
             print("journal template:")
-            print(settings.journalTemplate)
-            print("dailies folder: \(settings.dailiesFolderPath)")
+            print(stored.journalTemplate)
+            print("dailies folder: \(stored.dailiesFolderPath.isEmpty ? "(not set)" : stored.dailiesFolderPath)")
             print("dailies template:")
-            print(settings.dailiesTemplate)
+            print(stored.dailiesTemplate)
             return 0
         }
 
         if reportDailies || ensureDailies {
+            guard !dailiesFolder.isEmpty else {
+                FileHandle.standardError.write(Data(
+                    "error: no dailies folder. Pass --dailies-folder <path> or set one in the app.\n".utf8
+                ))
+                return 1
+            }
             let folder = URL(filePath: dailiesFolder, directoryHint: .isDirectory)
             let fileURL = Dailies.url(in: folder, date: day)
             let shown = FolderScanner.displayPath(fileURL)
@@ -306,6 +326,14 @@ enum CommandLineMode {
                 return 1
             }
         }
+
+        guard let resolved = rootFlag ?? (rootPath.isEmpty ? nil : rootPath) else {
+            FileHandle.standardError.write(Data(
+                "error: no root folder. Pass --root <path> or set one in the app.\n".utf8
+            ))
+            return 1
+        }
+        let root = URL(filePath: resolved, directoryHint: .isDirectory)
 
         do {
             let scanned = try FolderScanner.scan(root: root)

@@ -18,17 +18,12 @@ struct PreferencesView: View {
                             .onSubmit { store.reload() }
 
                         Button("Choose…") { chooseRoot() }
-                        Button("Default") {
-                            settings.resetRoot()
-                            store.reload()
-                        }
-                        .disabled(settings.isUsingDefaultRoot)
                     }
                 }
 
                 Text(rootStatus)
                     .font(.caption)
-                    .foregroundStyle(rootExists ? Color.secondary : Color.red)
+                    .foregroundStyle(rootIsUsable ? Color.secondary : Color.red)
             }
 
             Section("Journal template") {
@@ -69,10 +64,6 @@ struct PreferencesView: View {
                             .font(.callout)
 
                         Button("Choose…") { chooseDailiesFolder() }
-                        Button("Default") {
-                            settings.resetDailiesFolder()
-                        }
-                        .disabled(settings.isUsingDefaultDailiesFolder)
                     }
                 }
 
@@ -135,6 +126,7 @@ struct PreferencesView: View {
     // MARK: - Derived values
 
     private var rootExists: Bool {
+        guard settings.isRootConfigured else { return false }
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(
             atPath: settings.rootPath,
@@ -143,17 +135,25 @@ struct PreferencesView: View {
         return exists && isDirectory.boolValue
     }
 
+    private var rootIsUsable: Bool {
+        rootExists && store.loadError == nil
+    }
+
     private var rootStatus: String {
+        guard settings.isRootConfigured else {
+            return "No folder chosen yet — the app has no built-in default."
+        }
         if let error = store.loadError {
             return error
         }
-        if !rootExists {
+        guard rootExists else {
             return "Folder not found: \(settings.rootPath)"
         }
         return "\(store.folders.count) folders starting with \"sag \""
     }
 
     private var dailiesFolderExists: Bool {
+        guard settings.isDailiesConfigured else { return false }
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(
             atPath: settings.dailiesFolderPath,
@@ -166,11 +166,14 @@ struct PreferencesView: View {
         guard settings.isDailiesConfigured else {
             return "No folder set — ⌘D is disabled until you pick one."
         }
+        guard let folder = settings.dailiesFolderURL else {
+            return "No folder set."
+        }
         guard dailiesFolderExists else {
             return "Folder does not exist yet; it is created when the first note is opened."
         }
-        let today = Dailies.url(in: settings.dailiesFolderURL)
-        let exists = Dailies.exists(in: settings.dailiesFolderURL)
+        let today = Dailies.url(in: folder)
+        let exists = Dailies.exists(in: folder)
         return "\(exists ? "Today's file exists: " : "Today's file will be created as ")\(today.lastPathComponent)"
     }
 
@@ -179,11 +182,9 @@ struct PreferencesView: View {
     }
 
     private var preview: String {
+        let base = settings.rootURL ?? FileManager.default.homeDirectoryForCurrentUser
         let sample = store.folders.first
-            ?? FolderItem(
-                url: settings.rootURL.appending(path: "sag 0001 -- eksempel"),
-                modified: .now
-            )
+            ?? FolderItem(url: base.appending(path: "sag 0001 -- eksempel"), modified: .now)
         return Journal.render(template: settings.journalTemplate, for: sample)
     }
 
@@ -195,7 +196,7 @@ struct PreferencesView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.directoryURL = settings.dailiesFolderURL
+        panel.directoryURL = settings.dailiesFolderURL ?? FileManager.default.homeDirectoryForCurrentUser
         panel.prompt = "Choose"
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -208,7 +209,7 @@ struct PreferencesView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.directoryURL = settings.rootURL
+        panel.directoryURL = settings.rootURL ?? FileManager.default.homeDirectoryForCurrentUser
         panel.prompt = "Choose"
 
         guard panel.runModal() == .OK, let url = panel.url else { return }

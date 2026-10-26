@@ -41,24 +41,6 @@ enum SortOrder: String, CaseIterable, Identifiable {
 enum FolderScanner {
     static let namePrefix = "sag "
 
-    /// ~/OneDrive - Aarhus universitet/pkm/styring/sager
-    static var defaultRoot: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appending(
-                path: "OneDrive - Aarhus universitet/pkm/styring/sager",
-                directoryHint: .isDirectory
-            )
-    }
-
-    /// ~/OneDrive - Aarhus universitet/pkm/dailies
-    static var defaultDailiesFolder: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appending(
-                path: "OneDrive - Aarhus universitet/pkm/dailies",
-                directoryHint: .isDirectory
-            )
-    }
-
     /// Folders directly inside `root` whose name starts with `prefix`.
     /// Returned in no particular order; `sorted(_:by:)` applies the choice.
     static func scan(root: URL, prefix: String = namePrefix) throws -> [FolderItem] {
@@ -126,7 +108,7 @@ enum FolderScanner {
         trimmingTrailingSlash(url.path(percentEncoded: false))
     }
 
-    /// "/Users/me/OneDrive …/sager/" -> "~/OneDrive …/sager"
+    /// "/Users/me/notes/sager/" -> "~/notes/sager"
     /// (`homeDirectoryForCurrentUser` keeps a trailing slash, so strip both.)
     static func displayPath(_ url: URL) -> String {
         let home = trimmingTrailingSlash(

@@ -63,7 +63,7 @@ enum Dailies {
     }
 
     /// Creates today's note when it is missing; creates the folder too, so a
-    /// fresh OneDrive subfolder works without a trip to Finder.
+    /// fresh subfolder works without a trip to Finder.
     /// - Returns: the file URL and whether it had to be created.
     static func ensureExists(
         in folder: URL,

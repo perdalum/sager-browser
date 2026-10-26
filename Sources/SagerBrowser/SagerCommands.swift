@@ -12,6 +12,7 @@ struct SagerCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New sag…") { store.requestNewSag() }
                 .keyboardShortcut("n", modifiers: .command)
+                .disabled(!store.isRootConfigured)
         }
 
         // File > Open in Finder (⌘O), Open Journal (⌘J), Reload (⌘R)

@@ -1,13 +1,13 @@
 # SagerBrowser — proof of concept
 
-A small SwiftUI macOS app that lists the `sag …` folders in
+A small SwiftUI macOS app that lists the `sag …` case folders in a folder you
+choose, filters them as you type, and opens the selected folder in Finder on
+**Return** or **double-click**. It also opens each case's Markdown journal and
+today's daily note, creating either from a template when it is missing.
 
-```
-~/OneDrive - Aarhus universitet/pkm/styring/sager
-```
-
-filters them as you type, and opens the selected folder in Finder on
-**Return** or **double-click**.
+The app ships **without any configured folder and without a default**: the
+first launch asks you to point it at a folder (⌘,) instead of guessing at a
+personal path.
 
 This replaces the AppleScript version: no Apple events, so no Automation
 permission prompts and none of the `-10004` / `-1700` rough edges.
@@ -83,11 +83,11 @@ menu items drive the same actions the buttons do instead of going through
 **App ▸ Settings…** opens two settings, both persisted in `UserDefaults`
 (domain `local.sagerbrowser.poc`, so the raw binary and the `.app` agree):
 
-| Setting | Default | Effect |
+| Setting | Out of the box | Effect |
 | --- | --- | --- |
-| Root folder | `~/OneDrive - Aarhus universitet/pkm/styring/sager` | which folder is scanned; **Choose…** opens a folder panel, **Default** restores the OneDrive path. Editing the path rescans immediately. |
+| Root folder | *unset* | which folder is scanned; **Choose…** opens a folder panel and editing the path rescans immediately. Until it is set the window shows "No folder chosen" with a button to these settings, and ⌘N/⌘O/⌘J are disabled. |
 | Journal template | the skeleton below | contents of a journal file created from scratch |
-| Dailies folder | `~/OneDrive - Aarhus universitet/pkm/dailies` | where `yyyy-MM-dd.md` lives; **Choose…** picks another one, **Default** restores the path. A missing folder is created on first use. |
+| Dailies folder | *unset* | where `yyyy-MM-dd.md` lives; **Choose…** picks it. Until it is set ⌘D is disabled. A missing folder is created on first use. |
 | Dailies template | `# {dato} ({dag})` + sections | contents of a daily note created from scratch |
 
 The template placeholders are `{sagsnummer}`, `{mappe}` and `{dato}`; everything
@@ -141,8 +141,9 @@ only; it is not saved back.
 `--settings` prints all four persisted values. `--date` takes a `yyyy-MM-dd`
 date so the file name, weekday and week number can be checked for any day.
 
-Prints the root, the counts and the matching names; exits `1` with a message
-when the root cannot be read. This is the same code path the window uses, which
+Prints the root, the counts and the matching names. Without `--root` it uses the
+configured folder, and with neither it exits `1` telling you to pass `--root` —
+there is no built-in default to fall back on. This is the same code path the window uses, which
 is how the folder logic can be verified without a GUI session.
 
 ## Icon
@@ -166,13 +167,14 @@ preview above; the iconset intermediates live in `.build/`.
 
 ```
 SagerBrowser/
+├── CHANGELOG.md
 ├── Package.swift
 ├── Sources/SagerBrowser/
 │   ├── SagerBrowserApp.swift   @main, window scene, Settings scene
 │   ├── ContentView.swift       search bar, list, footer
 │   ├── FolderStore.swift       observable state, NSWorkspace open, CLI mode
-│   ├── AppSettings.swift       persisted root folder + journal template
-│   ├── PreferencesView.swift   ⌘, window: root folder, template, preview
+│   ├── AppSettings.swift       persisted folders + templates (no defaults)
+│   ├── PreferencesView.swift   ⌘, window: folders, templates, previews
 │   ├── Journal.swift           journal file naming + template rendering
 │   ├── Dailies.swift           yyyy-MM-dd.md naming, weekdays, ISO week
 │   ├── NewSag.swift           next number, folder + journal creation
@@ -212,27 +214,28 @@ SagerBrowser/
   from `Calendar.current` components rather than `Date.ISO8601FormatStyle`, which
   formats in UTC — a note started at 00:30 local time would otherwise be filed
   under the previous day. `{dag}` is the Danish weekday (`torsdag`), matching the
-  older notes in `pkm/dailies`, and `{uge}` is the ISO week. A missing dailies
+  Danish weekday names, and `{uge}` is the ISO week. A missing dailies
   folder is created with `createDirectory(withIntermediateDirectories:)`, so a
-  fresh OneDrive subfolder needs no setup; an existing file is opened untouched.
+  fresh subfolder needs no setup; an existing file is opened untouched.
 - **Scanning:** `FileManager.contentsOfDirectory(at:includingPropertiesForKeys:)`
   with `isDirectoryKey`. Names must start with `sag ` (case-sensitive, trailing
   space included) and be real folders; hidden entries are skipped.
 - **Sorting:** by name uses `localizedStandardCompare`, the Finder-like ordering
   that keeps `sag 0002` before `sag 0010`. By modification it is newest first
   (`contentModificationDate` of the folder itself), with name order as the
-  tie-break — your archive has only 24 distinct folder timestamps across 69
-  folders, so the tie-break does real work. Changing the order re-sorts what
-  is already in memory; ⌘R is only needed to rescan.
+  tie-break — folders written in one batch share a timestamp, so the tie-break
+  does real work. Changing the order re-sorts what is already in memory; ⌘R is
+  only needed to rescan.
 - **Filtering:** the query is split on whitespace (`FolderScanner.terms(in:)`)
   and the words are **AND'ed** with `localizedCaseInsensitiveContains`. So
-  `intune` matches `sag 0001 -- AU -- Intune registrering af Mac`, and
-  `chc hpc` matches only folders containing both words (3 of 69 here:
-  `sag 0017`, `sag 0018`, `sag 0078`). For OR semantics, swap
-  `terms.allSatisfy` for `terms.contains`.
-- **Home folder:** `FileManager.homeDirectoryForCurrentUser` (the Swift
-  equivalent of AppleScript's `path to home folder`); the footer shortens it
-  to `~/…`.
+  `intune` matches `sag 0001 -- Eksempel -- Intune registrering`, and
+  `chc hpc` matches only folders containing both words, so
+  `sag 0017 -- Eksempel -- chc hpc` matches but `sag 0020 -- chc` does not.
+  For OR semantics, swap `terms.allSatisfy` for `terms.contains`.
+- **Home folder:** `FileManager.homeDirectoryForCurrentUser` is used only as the
+  starting point for the folder panel and for `~/…` shortening in the footer.
+  No personal path is compiled into the app: `AppSettings.rootPath` starts empty
+  and everything that needs a folder is disabled until one is chosen.
 - **Settings:** `AppSettings` is an `@Observable` wrapper over an explicit
   `UserDefaults(suiteName: "local.sagerbrowser.poc")`. It is passed into
   `FolderStore`, which reads `root` and the journal template from it, so there is
@@ -245,7 +248,7 @@ license; it is generated by `Tools/make-icon.swift`, not third-party artwork.
 
 ## Known limitations (fine for a POC)
 
-- No file-system watcher: new OneDrive folders show up after ⌘R or relaunch.
+- No file-system watcher: new folders show up after ⌘R or relaunch.
 - Single selection only; no "reveal in parent folder"; no per-case notes or tags.
 - Dailies only ever open *today's* note; there is no picker for another date.
 - Ad-hoc signed, so it runs locally but is not distributable as-is
